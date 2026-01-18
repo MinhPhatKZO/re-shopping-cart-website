@@ -1,10 +1,11 @@
-name: Deploy to AWS
+name: Deploy to AWS (Professional)
 on:
   push:
     branches: [ "main" ]
 
 jobs:
-  deploy:
+  # --- CỤC 1: Xây dựng và Đẩy ảnh ---
+  build-push:
     runs-on: ubuntu-latest
     steps:
       - name: Lấy code về
@@ -32,33 +33,31 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/shopping-web:latest
 
-      # --- BẮT ĐẦU PHẦN SỬA ĐỔI ---
-      # Thay vì dùng plugin có sẵn, ta tự chạy lệnh SSH để xem lỗi chi tiết
-      - name: Deploy thủ công (Debug SSH)
+  # --- CỤC 2: Deploy lên Server (Chỉ chạy khi Cục 1 thành công) ---
+  deploy-aws:
+    needs: build-push  # <--- Dòng này tạo ra mũi tên kết nối
+    runs-on: ubuntu-latest
+    steps:
+      - name: Kết nối SSH và chạy lệnh
         run: |
-          # 1. Tạo file key từ Secret
+          # 1. Tạo file key
           echo "${{ secrets.AWS_SSH_KEY }}" > private_key.pem
           chmod 600 private_key.pem
           
-          # 2. Kết nối SSH trực tiếp
-          # -o StrictHostKeyChecking=no: Để nó không hỏi "Are you sure..." làm treo máy
-          # -v: In ra chi tiết quá trình kết nối (Debug)
-          ssh -o StrictHostKeyChecking=no -v -i private_key.pem ubuntu@${{ secrets.AWS_HOST_IP }} << 'EOF'
-            
-            echo "KET NOI THANH CONG! Bat dau deploy..."
+          # 2. SSH vào Server (Dùng lệnh thủ công cho ổn định)
+          ssh -o StrictHostKeyChecking=no -i private_key.pem ubuntu@${{ secrets.AWS_HOST_IP }} << 'EOF'
+            echo "Da ket noi Server! Bat dau cap nhat..."
             
             # Tắt web cũ
             sudo pkill -f java || true
             docker stop shopping-container || true
             docker rm shopping-container || true
             
-            # Xóa ảnh cũ
+            # Xóa ảnh cũ & Kéo ảnh mới
             docker rmi ${{ secrets.DOCKERHUB_USERNAME }}/shopping-web:latest || true
-            
-            # Kéo ảnh mới
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/shopping-web:latest
             
-            # Chạy container
+            # Chạy web mới
             docker run -d --name shopping-container \
               --network="host" \
               --restart unless-stopped \
