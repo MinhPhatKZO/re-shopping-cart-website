@@ -1,28 +1,15 @@
-server:
-  port: 8080
-
 spring:
-  application:
-    name: re-shopping-cart-web-app
-
-  profiles:
-    active: prod # Production development
-    # active: local # Local development
-
   datasource:
-    url: ${DB_URL}
-    username: ${DB_USERNAME}
-    password: ${DB_PASSWORD}
+    # Cấu hình kết nối tới Database nội bộ (trên Server AWS)
+    url: jdbc:mysql://localhost:3306/defaultdb
+    username: root
+    password: "123456"
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   jpa:
-    database-platform: org.hibernate.dialect.MySQLDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: true
     properties:
       hibernate:
         dialect: org.hibernate.dialect.MySQLDialect
-    hibernate:
-      ddl-auto: none
-    show-sql: false
-
-  thymeleaf:
-    cache: false
