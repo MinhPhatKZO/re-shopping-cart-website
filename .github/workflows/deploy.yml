@@ -32,33 +32,35 @@ jobs:
           push: true
           tags: ${{ secrets.DOCKERHUB_USERNAME }}/shopping-web:latest
 
-      - name: Deploy lên Server AWS
-        uses: appleboy/ssh-action@master
-        with:
-          host: ${{ secrets.AWS_HOST_IP }}
-          username: ubuntu
-          key: ${{ secrets.AWS_SSH_KEY }}
-          # --- CẤU HÌNH DEBUG MỚI ---
-          debug: true             # Bật chế độ soi lỗi chi tiết
-          timeout: 60s            # Tăng thời gian chờ kết nối lên 60 giây
-          command_timeout: 30m    # Tăng thời gian chạy lệnh lên 30 phút
-          # --------------------------
-          script: |
-            # 1. Tắt web cũ
-            sudo pkill -f java || true
+      # --- BẮT ĐẦU PHẦN SỬA ĐỔI ---
+      # Thay vì dùng plugin có sẵn, ta tự chạy lệnh SSH để xem lỗi chi tiết
+      - name: Deploy thủ công (Debug SSH)
+        run: |
+          # 1. Tạo file key từ Secret
+          echo "${{ secrets.AWS_SSH_KEY }}" > private_key.pem
+          chmod 600 private_key.pem
+          
+          # 2. Kết nối SSH trực tiếp
+          # -o StrictHostKeyChecking=no: Để nó không hỏi "Are you sure..." làm treo máy
+          # -v: In ra chi tiết quá trình kết nối (Debug)
+          ssh -o StrictHostKeyChecking=no -v -i private_key.pem ubuntu@${{ secrets.AWS_HOST_IP }} << 'EOF'
             
-            # 2. Dọn dẹp container cũ
+            echo "KET NOI THANH CONG! Bat dau deploy..."
+            
+            # Tắt web cũ
+            sudo pkill -f java || true
             docker stop shopping-container || true
             docker rm shopping-container || true
             
-            # 3. Xóa ảnh cũ
+            # Xóa ảnh cũ
             docker rmi ${{ secrets.DOCKERHUB_USERNAME }}/shopping-web:latest || true
             
-            # 4. Kéo ảnh mới về
+            # Kéo ảnh mới
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/shopping-web:latest
             
-            # 5. Chạy container mới
+            # Chạy container
             docker run -d --name shopping-container \
               --network="host" \
               --restart unless-stopped \
               ${{ secrets.DOCKERHUB_USERNAME }}/shopping-web:latest
+          EOF
