@@ -1,0 +1,50 @@
+name: Deploy to AWS
+on:
+  push:
+    branches: [ "main" ]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Lấy code về
+        uses: actions/checkout@v3
+
+      - name: Cài đặt Java 21
+        uses: actions/setup-java@v3
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Build ứng dụng (Tạo file .jar)
+        run: ./gradlew clean bootJar
+
+      - name: Đăng nhập Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Đóng gói & Đẩy ảnh lên Docker Hub
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          tags: ${{ secrets.DOCKERHUB_USERNAME }}/shopping-web:latest
+
+      - name: Deploy lên Server AWS
+        uses: appleboy/ssh-action@master
+        with:
+          host: ${{ secrets.AWS_HOST_IP }}
+          username: ubuntu
+          key: ${{ secrets.AWS_SSH_KEY }}
+          script: |
+            sudo pkill -f java || true
+            docker stop shopping-container || true
+            docker rm shopping-container || true
+            docker rmi ${{ secrets.DOCKERHUB_USERNAME }}/shopping-web:latest || true
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/shopping-web:latest
+            docker run -d --name shopping-container \
+              --network="host" \
+              --restart unless-stopped \
+              ${{ secrets.DOCKERHUB_USERNAME }}/shopping-web:latest
