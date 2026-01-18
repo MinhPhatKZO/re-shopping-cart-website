@@ -17,7 +17,8 @@ jobs:
           distribution: 'temurin'
 
       - name: Build ứng dụng (Tạo file .jar)
-        run: ./gradlew clean bootJar
+        # Đã sửa: Thêm lệnh chmod +x để cấp quyền chạy trước
+        run: chmod +x gradlew && ./gradlew clean bootJar
 
       - name: Đăng nhập Docker Hub
         uses: docker/login-action@v2
@@ -39,11 +40,20 @@ jobs:
           username: ubuntu
           key: ${{ secrets.AWS_SSH_KEY }}
           script: |
+            # 1. Tắt web cũ (nếu chạy bằng java -jar)
             sudo pkill -f java || true
+            
+            # 2. Dọn dẹp container cũ
             docker stop shopping-container || true
             docker rm shopping-container || true
+            
+            # 3. Xóa ảnh cũ để tiết kiệm ổ cứng
             docker rmi ${{ secrets.DOCKERHUB_USERNAME }}/shopping-web:latest || true
+            
+            # 4. Kéo ảnh mới về
             docker pull ${{ secrets.DOCKERHUB_USERNAME }}/shopping-web:latest
+            
+            # 5. Chạy container mới (Dùng mạng host để kết nối database local)
             docker run -d --name shopping-container \
               --network="host" \
               --restart unless-stopped \
